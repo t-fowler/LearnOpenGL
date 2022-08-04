@@ -7,20 +7,24 @@ const std::string vertexShaderSource =
 "#version 330 core\n"
 "\n"
 "layout (location = 0) in vec3 position;\n"
+"layout (location = 1) in vec4 colour;\n"
+"flat out vec4 vertexColour;\n"
 "\n"
 "void main()\n"
 "{\n"
 "   gl_Position = vec4(position.x, position.y, position.z, 1.0);\n"
+"   vertexColour = colour;"
 "}\0";
 
 const std::string fragmentShaderSource =
 "#version 330 core\n"
 "\n"
+"flat in vec4 vertexColour;\n"
 "out vec4 outColor;\n"
 "\n"
 "void main()\n"
 "{\n"
-"   outColor = vec4(0.196f, 0.804f, 0.196f, 1.0f);\n"
+"   outColor = vertexColour;\n"
 "}\0";
 
 
@@ -36,7 +40,7 @@ static unsigned int compileShader(const std::string& source, unsigned int type)
     if (result == GL_FALSE) {
         int length;
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-        char* message = (char*) alloca(length * sizeof(char));
+        char* message = (char*) _malloca(length * sizeof(char));
         std::cerr << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader!" << std::endl;
         std::cerr << message << std::endl;
         glDeleteShader(id);
@@ -62,6 +66,14 @@ static unsigned int createShader(const std::string& vertexShader, const std::str
     glDeleteShader(fs);
 
     return program;
+}
+
+static void printObject(unsigned int vbo, unsigned int vao, unsigned int ebo, int* indices)
+{
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(int), GL_UNSIGNED_INT, indices);
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -110,33 +122,124 @@ int main()
     std::cout << glGetString(GL_VERSION) << std::endl;
 
     // Setup data
-    float vertices[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-        -0.5f,  0.5f, 0.0f,
-         0.5f,  0.5f, 0.0f,
+    float vertices_t[] = {
+        -0.5f, -0.5f,  0.0f,
+        0.196f, 0.804f, 0.196f, 1.0f,
+        -0.3f, -0.5f,  0.0f,
+        0.8f, 0.0f, 0.1f, 1.0f,
+        -0.3f,  0.3f,  0.0f,
+        0.196f, 0.804f, 0.196f, 1.0f,
+        -0.5f,  0.3f,  0.0f,
+        0.8f, 0.0f, 0.1f, 1.0f,
+        -0.9f,  0.3f,  0.0f,
+        0.196f, 0.804f, 0.196f, 1.0f,
+        -0.9f,  0.5f,  0.0f,
+        0.8f, 0.0f, 0.1f, 1.0f,
+         0.1f,  0.5f,  0.0f,
+        0.196f, 0.804f, 0.196f, 1.0f,
+         0.1f,  0.3f,  0.0f,
+        0.8f, 0.0f, 0.1f, 1.0f
     };
-    int indices[] = {
-        1, 2, 3,
-        2, 4, 3
+    float vertices_f[] = {
+        // 0
+         0.2f, -0.5f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 1
+         0.4f, -0.5f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 2
+         0.4f, -0.1f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 3
+         0.7f, -0.1f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 4
+         0.7f,  0.1f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 5
+         0.4f,  0.1f,  0.0f,
+         0.196f, 0.804f, 0.196f, 1.0f,
+        // 6
+         0.4f,  0.3f,  0.0f,
+         0.196f, 0.804f, 0.196f, 1.0f,
+        // 7
+         0.9f,  0.3f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 8
+         0.9f,  0.5f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f,
+        // 9
+         0.4f,  0.5f,  0.0f,
+         0.196f, 0.804f, 0.196f, 1.0f,
+        // 10
+         0.2f,  0.5f,  0.0f,
+         0.196f, 0.804f, 0.196f, 1.0f,
+         // 11
+         0.4f,  0.5f,  0.0f,
+         0.8f, 0.0f, 0.1f, 1.0f
+    };
+    unsigned int model_t[] = {
+        0, 1, 2,
+        0, 2, 3,
+        4, 7, 6,
+        4, 6, 5
+    };
+    unsigned int model_f[] = {
+        0, 1, 11,
+        0, 9, 10,
+        2, 3, 4,
+        2, 4, 5,
+        6, 7, 8,
+        6, 8, 9
     };
     glClearColor(0.71f, 0.44f, 0.76f, 1.0f);
 
-    // Vertex Buffer Object initialization
-    unsigned int vbo, vao;
-    glGenBuffers(1, &vbo);
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    // T Buffer Object initialization
+    unsigned int t_vbo, t_vao, t_ebo;
+    glGenVertexArrays(1, &t_vao);
+    glGenBuffers(1, &t_vbo);
+    glGenBuffers(1, &t_ebo);
 
-    // Register and compile shader.
-    unsigned int shader = createShader(vertexShaderSource, fragmentShaderSource);
-    glUseProgram(shader);
+    glBindVertexArray(t_vao);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, t_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_t), vertices_t, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, t_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(model_t), model_t, GL_STATIC_DRAW);
 
     // Configure how OpenGL will interpret buffer data.
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (const void*)0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (const void*) (3 * sizeof(float)));
     glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // F Buffer Object intialization
+    unsigned int f_vbo, f_vao, f_ebo;
+    glGenVertexArrays(1, &f_vao);
+    glGenBuffers(1, &f_vbo);
+    glGenBuffers(1, &f_ebo);
+
+    glBindVertexArray(f_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, f_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_f), vertices_f, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, f_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(model_f), model_f, GL_STATIC_DRAW);
+
+    // Configure how OpenGL will interpret buffer data.
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (const void*)0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (const void*) (3 * sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+
+    // Register and compile shader.
+    unsigned int t_shader = createShader(vertexShaderSource, fragmentShaderSource);
+    unsigned int f_shader = createShader(vertexShaderSource, fragmentShaderSource);
 
     // Run the application loop.
     while (!glfwWindowShouldClose(window)) {
@@ -146,13 +249,33 @@ int main()
         // render
         glClear(GL_COLOR_BUFFER_BIT);
         
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glUseProgram(t_shader);
+        glBindVertexArray(t_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, t_vbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, t_ebo);
+        glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, nullptr);
+        glUseProgram(0);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        glUseProgram(f_shader);
+        glBindVertexArray(f_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, f_vbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, f_ebo);
+        glDrawElements(GL_TRIANGLES, 18, GL_UNSIGNED_INT, nullptr);
+        glUseProgram(0);
+        
+        //glBindVertexArray(f_vao);
+        //glBindBuffer(GL_ARRAY_BUFFER, f_vbo);
+        //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, f_ebo);
+        //glDrawElements(GL_TRIANGLES, 18, GL_INT, model_f);
 
         // poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-    glDeleteProgram(shader);
+    glDeleteProgram(t_shader);
     glfwTerminate();
 
     return 0;
